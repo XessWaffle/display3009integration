@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="ESPControlServer">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/ESPControlServer.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
