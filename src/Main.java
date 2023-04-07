@@ -183,6 +183,9 @@ public final class Main {
         String[] options = {"Default", "Radial FT", "Angular FT", "Radial IFT", "Angular IFT"};
 
         JComboBox<String> exportBox = new JComboBox(options);
+        DefaultListCellRenderer listRenderer = new DefaultListCellRenderer();
+        listRenderer.setHorizontalAlignment(DefaultListCellRenderer.CENTER); // center-aligned items
+        exportBox.setRenderer(listRenderer);
         exportBox.addActionListener(e -> {
             String selected = exportBox.getItemAt(exportBox.getSelectedIndex());
             switch (selected){

@@ -67,7 +67,9 @@ public class SectoredCircle extends JPanel {
     private boolean show = true, showImage = true, showSampling = false;
 
     private HashMap<Integer, HashMap<Integer, Integer>> sampled;
-    private HashMap<Integer, ArrayList<Integer>> converted, full, itransform, vtransform, ring, iringTransform, vringTransform;
+    private HashMap<Integer, ArrayList<Integer>> converted, full, ring,
+                                                itransform, vtransform,
+                                                iringTransform, vringTransform;
 
     private HashMap<Integer, ArrayList<Integer>> displayed;
     private HashMap<Integer, ArrayList<Triple<Complex, Complex, Complex>>> transform, ringTransform;
@@ -261,18 +263,19 @@ public class SectoredCircle extends JPanel {
 
         compileSamples();
 
-        sampleTransform();
+        sampleTransform(true);
 
-        sampleITransform();
+        sampleITransform(true);
     }
 
-    private void sampleTransform() {
+    private void sampleTransform(boolean useDCT) {
 
         transform.clear();
         vtransform.clear();
 
         ringTransform.clear();
         vringTransform.clear();
+
 
         for(int i = 0; i < SECTORS; i++){
             ArrayList<Integer> sectorColors = full.get(i);
@@ -289,9 +292,9 @@ public class SectoredCircle extends JPanel {
                 blue.add((double) blueSample);
             });
 
-            redFt = DFT(red);
-            greenFt = DFT(green);
-            blueFt = DFT(blue);
+            redFt = useDCT ? DCT(red) : DFT(red);
+            greenFt = useDCT ? DCT(green) : DFT(green);
+            blueFt = useDCT ? DCT(blue) : DFT(blue);
 
             ArrayList<Triple<Complex, Complex, Complex>> sectorFt = new ArrayList<>();
             ArrayList<Integer> sector = new ArrayList<>();
@@ -328,9 +331,9 @@ public class SectoredCircle extends JPanel {
                 blue.add((double) blueSample);
             });
 
-            redFt = DFT(red);
-            greenFt = DFT(green);
-            blueFt = DFT(blue);
+            redFt = useDCT ? DCT(red) : DFT(red);
+            greenFt = useDCT ? DCT(green) : DFT(green);
+            blueFt = useDCT ? DCT(blue) : DFT(blue);
 
             ArrayList<Triple<Complex, Complex, Complex>> sectorFt = new ArrayList<>();
 
@@ -354,13 +357,13 @@ public class SectoredCircle extends JPanel {
         }
     }
 
-    private void sampleITransform(){
+    private void sampleITransform(boolean useDCT){
 
         iringTransform.clear();
         itransform.clear();
 
         int filterStart = 0;
-        int filterEnd = 50;
+        int filterEnd = 20;
 
         for(int i = 0; i < SECTORS; i++){
             ArrayList<Triple<Complex, Complex, Complex>> ftColors = transform.get(i);
@@ -374,9 +377,12 @@ public class SectoredCircle extends JPanel {
                 blue.add(e.third);
             });
 
-            sectorT = iDFT(red, filterStart, NUM_LEDS - filterEnd, true);
-            greenT = iDFT(green, filterStart, NUM_LEDS - filterEnd, true);
-            blueT = iDFT(blue, filterStart, NUM_LEDS - filterEnd, true);
+            sectorT = useDCT ? iDCT(red, filterStart, NUM_LEDS - filterEnd, true) :
+                                iDFT(red, filterStart, NUM_LEDS - filterEnd, true);
+            greenT = useDCT ? iDCT(green, filterStart, NUM_LEDS - filterEnd, true) :
+                                iDFT(green, filterStart, NUM_LEDS - filterEnd, true);
+            blueT = useDCT ? iDCT(blue, filterStart, NUM_LEDS - filterEnd, true) :
+                                iDFT(blue, filterStart, NUM_LEDS - filterEnd, true);
 
             for(int j = 0; j < sectorT.size(); j++){
                 int value = sectorT.get(j);
@@ -388,8 +394,8 @@ public class SectoredCircle extends JPanel {
             itransform.put(i, sectorT);
         }
 
-        filterStart = 180;
-        filterEnd = 180;
+        filterStart = 0;
+        filterEnd = 270;
 
         for(int i = 0; i < NUM_LEDS; i++){
             ArrayList<Triple<Complex, Complex, Complex>> ftColors = ringTransform.get(i);
@@ -403,9 +409,12 @@ public class SectoredCircle extends JPanel {
                 blue.add(e.third);
             });
 
-            sectorT = iDFT(red, filterStart, filterEnd, false);
-            greenT = iDFT(green, filterStart, filterEnd, false);
-            blueT = iDFT(blue, filterStart, filterEnd, false);
+            sectorT = useDCT ? iDCT(red, filterStart, filterEnd, true) :
+                    iDFT(red, filterStart, filterEnd, false);
+            greenT = useDCT ? iDCT(green, filterStart, filterEnd, true) :
+                    iDFT(green, filterStart, filterEnd, false);
+            blueT = useDCT ? iDCT(blue, filterStart, filterEnd, true) :
+                    iDFT(blue, filterStart, filterEnd, false);
 
             for(int j = 0; j < sectorT.size(); j++){
                 int value = sectorT.get(j);
@@ -462,6 +471,23 @@ public class SectoredCircle extends JPanel {
         return transformed;
     }
 
+
+    private ArrayList<Complex> DCT(ArrayList<Double> samples) {
+
+        ArrayList<Complex> transformed = new ArrayList<>();
+
+        for(int i = 0; i < samples.size(); i++) {
+            double next = 0;
+            for (int j = 0; j < samples.size(); j++) {
+                next += samples.get(j) * Math.cos(Math.PI * i * (j + 0.5) / samples.size());
+            }
+            transformed.add(new Complex(next, 0));
+        }
+
+        return transformed;
+    }
+
+
     private ArrayList<Integer> iDFT(ArrayList<Complex> samples, int filterStart, int filterEnd, boolean inclusive) {
 
         ArrayList<Integer> transformed = new ArrayList<>();
@@ -477,6 +503,27 @@ public class SectoredCircle extends JPanel {
                     next += samples.get(j).real * Math.cos(2 * Math.PI * i * j / samples.size())  + samples.get(j).imag * Math.sin(2 * Math.PI * i * j / samples.size());
             }
             next /= samples.size();
+            transformed.add((int) next);
+        }
+
+        return transformed;
+    }
+
+    private ArrayList<Integer> iDCT(ArrayList<Complex> samples, int filterStart, int filterEnd, boolean inclusive) {
+
+        ArrayList<Integer> transformed = new ArrayList<>();
+
+        for(int i = 0; i < samples.size(); i++) {
+            double next = 0.5 * samples.get(0).real;
+            for (int j = 1; j < samples.size(); j++) {
+
+                boolean inclusiveCase = (inclusive && j >= filterStart && j <= filterEnd);
+                boolean exclusiveCase = (!inclusive && (j <= filterStart || j >= filterEnd));
+
+                if(inclusiveCase || exclusiveCase)
+                    next += samples.get(j).real * Math.cos(Math.PI * (i + 0.5) * j / samples.size());
+            }
+            next *= 2.0 / samples.size();
             transformed.add((int) next);
         }
 
