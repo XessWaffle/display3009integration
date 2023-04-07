@@ -25,7 +25,6 @@ import javax.swing.filechooser.FileFilter;
 public final class Main {
 
     public static final byte DISPLAY_ID = 0x01;
-    public static final int STREAM_INDEX = 6;
 
     private JFrame frame;
 
@@ -142,7 +141,7 @@ public final class Main {
             }
         });
 
-        circle.setBounds(50, 50, SectoredCircle.PANEL_WIDTH, SectoredCircle.PANEL_HEIGHT);
+        circle.setBounds(10, 50, SectoredCircle.PANEL_WIDTH, SectoredCircle.PANEL_HEIGHT);
         frame.getContentPane().add(circle);
 
         JButton loadButton = new JButton("Load");
@@ -181,18 +180,38 @@ public final class Main {
         sampleButton.setBounds(1000, 60, SectoredCircle.PANEL_WIDTH / 4, 50);
         frame.getContentPane().add(sampleButton);
 
-        JButton exportButton = new JButton("Export");
-        exportButton.addActionListener(e -> {
+        String[] options = {"Default", "Radial FT", "Angular FT", "Radial IFT", "Angular IFT"};
 
-            circle.sample();
+        JComboBox<String> exportBox = new JComboBox(options);
+        exportBox.addActionListener(e -> {
+            String selected = exportBox.getItemAt(exportBox.getSelectedIndex());
+            switch (selected){
 
-            StringSelection selection = new StringSelection(circle.createCode());
-            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-            clipboard.setContents(selection, selection);
+                case "Radial FT":
+                    circle.showRadial(false);
+                    break;
+
+                case "Angular FT":
+                    circle.showAngular(false);
+                    break;
+
+                case "Radial IFT":
+                    circle.showRadial(true);
+                    break;
+
+                case "Angular IFT":
+                    circle.showAngular(true);
+                    break;
+
+                default:
+                    circle.showDefaultSample();
+                    break;
+            }
+            circle.repaint();
         });
 
-        exportButton.setBounds(1000, 120, SectoredCircle.PANEL_WIDTH / 4, 50);
-        frame.getContentPane().add(exportButton);
+        exportBox.setBounds(1000, 120, SectoredCircle.PANEL_WIDTH / 4, 50);
+        frame.getContentPane().add(exportBox);
 
         JButton toggleStart = new JButton("Start");
         toggleStart.addActionListener(e -> {
@@ -337,17 +356,17 @@ public final class Main {
             }
         });
 
-        xSlider.setBounds(50, 0, SectoredCircle.PANEL_WIDTH, 40);
-        ySlider.setBounds(SectoredCircle.PANEL_WIDTH + 50, 50, 70, SectoredCircle.PANEL_HEIGHT);
-        scaleSlider.setBounds(SectoredCircle.PANEL_WIDTH + 120, 50, 70, SectoredCircle.PANEL_HEIGHT);
+        xSlider.setBounds(10, 0, SectoredCircle.PANEL_WIDTH, 40);
+        ySlider.setBounds(SectoredCircle.PANEL_WIDTH + 10, 50, 70, SectoredCircle.PANEL_HEIGHT);
+        scaleSlider.setBounds(SectoredCircle.PANEL_WIDTH + 90, 50, 70, SectoredCircle.PANEL_HEIGHT);
         multSlider.setBounds(1000, 300, 70, 400);
         throttleSlider.setBounds(1130, 300, 70, 400);
 
-        xlabel.setBounds(50, 850, 100, 50);
-        ylabel.setBounds(200, 850, 100, 50);
-        scalelabel.setBounds(350, 850, 100, 50);
-        multlabel.setBounds(500, 850, 100, 50);
-        throttlelabel.setBounds(650, 850, 100, 50);
+        xlabel.setBounds(10, 850, 100, 50);
+        ylabel.setBounds(160, 850, 100, 50);
+        scalelabel.setBounds(310, 850, 100, 50);
+        multlabel.setBounds(460, 850, 100, 50);
+        throttlelabel.setBounds(610, 850, 100, 50);
 
         frame.getContentPane().add(xSlider);
         frame.getContentPane().add(ySlider);

@@ -7,6 +7,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.sql.Array;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -14,6 +15,7 @@ import java.util.HashSet;
 import static java.lang.Math.exp;
 
 public class SectoredCircle extends JPanel {
+
 
     public class Triple<T, U, V> {
 
@@ -32,10 +34,24 @@ public class SectoredCircle extends JPanel {
         public V getThird() { return third; }
     }
 
+    public class Complex{
+        private double real;
+        private double imag;
+
+        public Complex(double real, double imag){
+            this.real = (int) real;
+            this.imag = (int) imag;
+        }
+
+        public double magnitude(){
+            return Math.sqrt(real * real + imag * imag);
+        }
+    }
+
     public static final int PANEL_WIDTH = 800;
     public static final int PANEL_HEIGHT = 800;
 
-    public static final int SECTORS = 350;
+    public static final int SECTORS = 360;
 
     public static final int NUM_LEDS = 72;
 
@@ -51,7 +67,10 @@ public class SectoredCircle extends JPanel {
     private boolean show = true, showImage = true, showSampling = false;
 
     private HashMap<Integer, HashMap<Integer, Integer>> sampled;
-    private HashMap<Integer, ArrayList<Integer>> converted;
+    private HashMap<Integer, ArrayList<Integer>> converted, full, itransform, vtransform, ring, iringTransform, vringTransform;
+
+    private HashMap<Integer, ArrayList<Integer>> displayed;
+    private HashMap<Integer, ArrayList<Triple<Complex, Complex, Complex>>> transform, ringTransform;
     // Sector, <Sector to Copy, Changed values>
     private HashMap<Integer, Pair<Integer, HashMap<Integer, Integer>>> copies;
 
@@ -67,9 +86,18 @@ public class SectoredCircle extends JPanel {
         yOff = 0;
         sampled = new HashMap<>();
         converted = new HashMap<>();
+        full = new HashMap<>();
+        ring = new HashMap<>();
+        iringTransform = new HashMap<>();
+        vringTransform = new HashMap<>();
+        ringTransform = new HashMap<>();
         copies = new HashMap<>();
         compiled = new HashMap<>();
+        transform = new HashMap<>();
+        itransform = new HashMap<>();
         colorMap = new HashSet<>();
+        vtransform = new HashMap<>();
+        displayed = full;
     }
 
     public void paintComponent(Graphics g) {
@@ -114,9 +142,7 @@ public class SectoredCircle extends JPanel {
 
                 boolean highlight = converted.containsKey(sector);
 
-                if(highlight)
-                    crgbs = converted.get(sector);
-
+                crgbs = displayed.get(sector);
 
                 for (int j = 0; j < NUM_LEDS; j++) {
                     int crgb = crgbs.get(j);
@@ -133,6 +159,8 @@ public class SectoredCircle extends JPanel {
                     iterY += unitY * dist / NUM_LEDS;
                 }
                 sector++;
+
+                if(sector >= SECTORS) sector -= SECTORS;
             }
         }
 
@@ -223,7 +251,240 @@ public class SectoredCircle extends JPanel {
         this.repaint();
     }
 
-    public void sample(){
+    public void sample() {
+
+        sampleImage();
+
+        expandSampling();
+
+        sampleDifferences();
+
+        compileSamples();
+
+        sampleTransform();
+
+        sampleITransform();
+    }
+
+    private void sampleTransform() {
+
+        transform.clear();
+        vtransform.clear();
+
+        ringTransform.clear();
+        vringTransform.clear();
+
+        for(int i = 0; i < SECTORS; i++){
+            ArrayList<Integer> sectorColors = full.get(i);
+
+            ArrayList<Double> red = new ArrayList<>(), green = new ArrayList<>(), blue = new ArrayList<>();
+            ArrayList<Complex> redFt, greenFt, blueFt;
+
+            sectorColors.forEach((e)->{
+                int redSample = (e >> 16) & 0xFF;
+                int greenSample = (e >> 8) & 0xFF;
+                int blueSample = e & 0xFF;
+                red.add((double) redSample);
+                green.add((double) greenSample);
+                blue.add((double) blueSample);
+            });
+
+            redFt = DFT(red);
+            greenFt = DFT(green);
+            blueFt = DFT(blue);
+
+            ArrayList<Triple<Complex, Complex, Complex>> sectorFt = new ArrayList<>();
+            ArrayList<Integer> sector = new ArrayList<>();
+
+            for(int j = 0; j < redFt.size(); j++){
+                sectorFt.add(new Triple<>(redFt.get(j), greenFt.get(j), blueFt.get(j)));
+
+                int redV = (int) redFt.get(j).magnitude();
+                int greenV = (int) greenFt.get(j).magnitude();
+                int blueV = (int) blueFt.get(j).magnitude();
+
+                int value = redV;
+                value = ((value << 8) + greenV);
+                value = ((value << 8) + blueV);
+                sector.add(value);
+            }
+
+            vtransform.put(i, sector);
+            transform.put(i, sectorFt);
+        }
+
+        for(int i = 0; i < NUM_LEDS; i++){
+            ArrayList<Integer> sectorColors = ring.get(i);
+
+            ArrayList<Double> red = new ArrayList<>(), green = new ArrayList<>(), blue = new ArrayList<>();
+            ArrayList<Complex> redFt, greenFt, blueFt;
+
+            sectorColors.forEach((e)->{
+                int redSample = (e >> 16) & 0xFF;
+                int greenSample = (e >> 8) & 0xFF;
+                int blueSample = e & 0xFF;
+                red.add((double) redSample);
+                green.add((double) greenSample);
+                blue.add((double) blueSample);
+            });
+
+            redFt = DFT(red);
+            greenFt = DFT(green);
+            blueFt = DFT(blue);
+
+            ArrayList<Triple<Complex, Complex, Complex>> sectorFt = new ArrayList<>();
+
+
+            for(int j = 0; j < redFt.size(); j++){
+                sectorFt.add(new Triple<>(redFt.get(j), greenFt.get(j), blueFt.get(j)));
+
+                int redV = (int) redFt.get(j).magnitude();
+                int greenV = (int) greenFt.get(j).magnitude();
+                int blueV = (int) blueFt.get(j).magnitude();
+
+                int value = redV;
+                value = ((value << 8) + greenV);
+                value = ((value << 8) + blueV);
+
+                vringTransform.putIfAbsent(j, new ArrayList<Integer>());
+                vringTransform.get(j).add(value);
+            }
+
+            ringTransform.put(i, sectorFt);
+        }
+    }
+
+    private void sampleITransform(){
+
+        iringTransform.clear();
+        itransform.clear();
+
+        int filterStart = 0;
+        int filterEnd = 50;
+
+        for(int i = 0; i < SECTORS; i++){
+            ArrayList<Triple<Complex, Complex, Complex>> ftColors = transform.get(i);
+
+            ArrayList<Complex> red = new ArrayList<>(), green = new ArrayList<>(), blue = new ArrayList<>();
+            ArrayList<Integer> sectorT, greenT, blueT;
+
+            ftColors.forEach((e)->{
+                red.add(e.first);
+                green.add(e.second);
+                blue.add(e.third);
+            });
+
+            sectorT = iDFT(red, filterStart, NUM_LEDS - filterEnd, true);
+            greenT = iDFT(green, filterStart, NUM_LEDS - filterEnd, true);
+            blueT = iDFT(blue, filterStart, NUM_LEDS - filterEnd, true);
+
+            for(int j = 0; j < sectorT.size(); j++){
+                int value = sectorT.get(j);
+                value = ((value << 8) + greenT.get(j));
+                value = ((value << 8) + blueT.get(j));
+                sectorT.set(j, value);
+            }
+
+            itransform.put(i, sectorT);
+        }
+
+        filterStart = 180;
+        filterEnd = 180;
+
+        for(int i = 0; i < NUM_LEDS; i++){
+            ArrayList<Triple<Complex, Complex, Complex>> ftColors = ringTransform.get(i);
+
+            ArrayList<Complex> red = new ArrayList<>(), green = new ArrayList<>(), blue = new ArrayList<>();
+            ArrayList<Integer> sectorT, greenT, blueT;
+
+            ftColors.forEach((e)->{
+                red.add(e.first);
+                green.add(e.second);
+                blue.add(e.third);
+            });
+
+            sectorT = iDFT(red, filterStart, filterEnd, false);
+            greenT = iDFT(green, filterStart, filterEnd, false);
+            blueT = iDFT(blue, filterStart, filterEnd, false);
+
+            for(int j = 0; j < sectorT.size(); j++){
+                int value = sectorT.get(j);
+                value = ((value << 8) + greenT.get(j));
+                value = ((value << 8) + blueT.get(j));
+
+                iringTransform.putIfAbsent(j, new ArrayList<Integer>());
+                iringTransform.get(j).add(value);
+            }
+        }
+
+    }
+
+    private ArrayList<Integer> zeros(int num){
+        ArrayList<Integer> zero = new ArrayList<>();
+        for(int i = 0; i < num; i++){
+            zero.add(0);
+        }
+        return zero;
+    }
+
+    private ArrayList<Integer> scale(ArrayList<Integer> colors, double scale){
+        ArrayList<Integer> dimmed = new ArrayList<>();
+
+        for(int i = 0; i < colors.size(); i++){
+            int redSample = (colors.get(i) >> 16) & 0xFF;
+            int greenSample = (colors.get(i) >> 8) & 0xFF;
+            int blueSample = colors.get(i) & 0xFF;
+
+            int value = (int) (redSample * scale);
+            value = ((value << 8) + (int) (greenSample * scale));
+            value = ((value << 8) + (int) (blueSample * scale));
+
+            dimmed.add(value);
+        }
+
+        return dimmed;
+    }
+
+    private ArrayList<Complex> DFT(ArrayList<Double> samples) {
+
+        ArrayList<Complex> transformed = new ArrayList<>();
+
+        for(int i = 0; i < samples.size(); i++) {
+            double next = 0;
+            double nextSin = 0;
+            for (int j = 0; j < samples.size(); j++) {
+                next += samples.get(j) * Math.cos(2 * Math.PI * i * j / samples.size());
+                nextSin += samples.get(j) * Math.sin(2 * Math.PI * i * j / samples.size());
+            }
+            transformed.add(new Complex(next, nextSin));
+        }
+
+        return transformed;
+    }
+
+    private ArrayList<Integer> iDFT(ArrayList<Complex> samples, int filterStart, int filterEnd, boolean inclusive) {
+
+        ArrayList<Integer> transformed = new ArrayList<>();
+
+        for(int i = 0; i < samples.size(); i++) {
+            double next = 0;
+            for (int j = 0; j < samples.size(); j++) {
+
+                boolean inclusiveCase = (inclusive && j >= filterStart && j <= filterEnd);
+                boolean exclusiveCase = (!inclusive && (j <= filterStart || j >= filterEnd));
+
+                if(inclusiveCase || exclusiveCase)
+                    next += samples.get(j).real * Math.cos(2 * Math.PI * i * j / samples.size())  + samples.get(j).imag * Math.sin(2 * Math.PI * i * j / samples.size());
+            }
+            next /= samples.size();
+            transformed.add((int) next);
+        }
+
+        return transformed;
+    }
+
+    private void sampleImage() {
+
         this.showGuide(true);
         BufferedImage image = generateImage();
         this.showGuide(false);
@@ -234,12 +495,10 @@ public class SectoredCircle extends JPanel {
         }
 
         sampled.clear();
-        converted.clear();
-        copies.clear();
-        compiled.clear();
         colorMap.clear();
+
         // LED <Sector, Color>
-        for(int i = 0; i < NUM_LEDS; i++){
+        for (int i = 0; i < NUM_LEDS; i++) {
 
             HashMap<Integer, Integer> ledColorChangeMap = new HashMap<>();
 
@@ -247,7 +506,7 @@ public class SectoredCircle extends JPanel {
 
             int trueSampleRadius = SAMPLE_RADIUS;
 
-            for(double j = 0; j < 2 * Math.PI; j += 2 * Math.PI / SECTORS){
+            for (double j = 0; j < 2 * Math.PI; j += 2 * Math.PI / SECTORS) {
                 double angle = j + Math.PI / SECTORS;
 
                 double unitX = Math.cos(angle), unitY = Math.sin(angle);
@@ -256,12 +515,12 @@ public class SectoredCircle extends JPanel {
 
                 double trueUnitX = (endX - startX), trueUnitY = (endY - startY);
 
-                double iterX = startX + (double) i/NUM_LEDS * trueUnitX, iterY = startY + (double) i/NUM_LEDS * trueUnitY;
+                double iterX = startX + (double) i / NUM_LEDS * trueUnitX, iterY = startY + (double) i / NUM_LEDS * trueUnitY;
 
                 double red = 0, green = 0, blue = 0;
 
-                for(int x = -trueSampleRadius; x <= trueSampleRadius; x++)
-                    for(int y = -trueSampleRadius; y <= trueSampleRadius; y++) {
+                for (int x = -trueSampleRadius; x <= trueSampleRadius; x++)
+                    for (int y = -trueSampleRadius; y <= trueSampleRadius; y++) {
                         Color crgb = new Color(image.getRGB((int) iterX + x, (int) iterY + y));
                         int rgb = crgb.getRGB();
 
@@ -296,7 +555,7 @@ public class SectoredCircle extends JPanel {
 
                 colorMap.add(value);
 
-                if(ledColorChangeMap.isEmpty() || ledColorChangeMap.get(prevSector) != value){
+                if (ledColorChangeMap.isEmpty() || ledColorChangeMap.get(prevSector) != value) {
                     prevSector = sector;
                     ledColorChangeMap.put(prevSector, value);
                 }
@@ -305,10 +564,17 @@ public class SectoredCircle extends JPanel {
             sampled.put(i, ledColorChangeMap);
             System.out.println(i + ":" + ledColorChangeMap.size());
         }
+    }
+
+    private void expandSampling() {
+
+        full.clear();
+        converted.clear();
+        ring.clear();
 
         ArrayList<Integer> prev = null;
 
-        for(int i = 0; i < SECTORS; i++) {
+        for (int i = 0; i < SECTORS; i++) {
             ArrayList<Integer> armFrame = new ArrayList<>();
             while (armFrame.size() < NUM_LEDS) armFrame.add(0);
             boolean hasSampled = false;
@@ -325,10 +591,27 @@ public class SectoredCircle extends JPanel {
                 converted.put(i, armFrame);
                 prev = armFrame;
             }
+            full.put(i, armFrame);
         }
 
-        for(int i = SECTORS - 1; i >= 0; i--){
-            if(converted.containsKey(i)) {
+        for(int i = 0; i < NUM_LEDS; i++){
+
+            ArrayList<Integer> ringColors = new ArrayList<>();
+
+            for(int j = 0; j < SECTORS; j++){
+                ringColors.add(full.get(j).get(i));
+            }
+
+            ring.put(i, ringColors);
+        }
+    }
+
+    private void sampleDifferences() {
+
+        copies.clear();
+
+        for (int i = SECTORS - 1; i >= 0; i--) {
+            if (converted.containsKey(i)) {
 
                 HashMap<Integer, Integer> differences = null;
 
@@ -337,30 +620,35 @@ public class SectoredCircle extends JPanel {
                 int minInd = -1;
 
                 for (int j = i - 1; j >= 0; j--) {
-                    if(converted.containsKey(j)){
+                    if (converted.containsKey(j)) {
                         ArrayList<Integer> checkJ = converted.get(j);
                         HashMap<Integer, Integer> curr = new HashMap<>();
-                        for(int k = 0; k < NUM_LEDS; k++) {
+                        for (int k = 0; k < NUM_LEDS; k++) {
                             if (checkJ.get(k) != checkI.get(k)) {
                                 curr.put(k, checkI.get(k));
                             }
                         }
 
-                        if(differences == null || differences.size() > curr.size()){
+                        if (differences == null || differences.size() > curr.size()) {
                             minInd = j;
                             differences = curr;
                         }
                     }
                 }
 
-                if(minInd >= 0)
+                if (minInd >= 0)
                     copies.put(i, new Pair<>(minInd, differences));
 
             }
         }
+    }
 
-        for(int i = SECTORS - 1; i >= 0; i--){
-            if(converted.containsKey(i)) {
+    private void compileSamples() {
+
+        compiled.clear();
+
+        for (int i = SECTORS - 1; i >= 0; i--) {
+            if (converted.containsKey(i)) {
 
                 int start = 0, current;
 
@@ -369,12 +657,12 @@ public class SectoredCircle extends JPanel {
                 ArrayList<Integer> checkI = converted.get(i);
                 current = checkI.get(0);
                 //System.out.print(i + " ");
-                for(int j = 1; j <= checkI.size(); j++){
-                    if(j == checkI.size() || checkI.get(j) != current ){
+                for (int j = 1; j <= checkI.size(); j++) {
+                    if (j == checkI.size() || checkI.get(j) != current) {
                         //System.out.print("(" + current + ":" +  start + "=" + j + "),");
                         color.add(new Triple(start, j, current));
 
-                        if(j != checkI.size()) {
+                        if (j != checkI.size()) {
                             current = checkI.get(j);
                             start = j;
                         }
@@ -386,11 +674,6 @@ public class SectoredCircle extends JPanel {
         }
 
         System.out.println("Unique Colors: " + colorMap.size());
-
-        for(int i:colorMap){
-            System.out.println(String.format("%x", i));
-        }
-
     }
 
     public int sample(int x, int y){
@@ -401,6 +684,19 @@ public class SectoredCircle extends JPanel {
         }
         return 0;
     }
+
+    public void showRadial(boolean ift) {
+        this.displayed = ift ? iringTransform : vringTransform;
+    }
+
+    public void showAngular(boolean ift) {
+        this.displayed = ift ? itransform : vtransform;
+    }
+
+    public void showDefaultSample() {
+        this.displayed = full;
+    }
+
 
     public String createCode(){
         StringBuilder code = new StringBuilder();
