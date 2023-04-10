@@ -1,5 +1,8 @@
 import javafx.util.Pair;
 import server.ESPControlServer;
+import util.FourierUtils.Complex;
+import util.TransformationUtils;
+import util.TransformationUtils.*;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -7,46 +10,12 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.sql.Array;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 
-import static java.lang.Math.exp;
-
 public class SectoredCircle extends JPanel {
 
-
-    public class Triple<T, U, V> {
-
-        private final T first;
-        private final U second;
-        private final V third;
-
-        public Triple(T first, U second, V third) {
-            this.first = first;
-            this.second = second;
-            this.third = third;
-        }
-
-        public T getFirst() { return first; }
-        public U getSecond() { return second; }
-        public V getThird() { return third; }
-    }
-
-    public class Complex{
-        private double real;
-        private double imag;
-
-        public Complex(double real, double imag){
-            this.real = (int) real;
-            this.imag = (int) imag;
-        }
-
-        public double magnitude(){
-            return Math.sqrt(real * real + imag * imag);
-        }
-    }
 
     public static final int PANEL_WIDTH = 800;
     public static final int PANEL_HEIGHT = 800;
@@ -58,6 +27,7 @@ public class SectoredCircle extends JPanel {
     public static final int SAMPLE_RADIUS = 4;
 
     public static final byte[] FRAME_CLIENTS = {0x02, 0x03};
+    private static final int FT_SAMPLES = 12;
 
     private BufferedImage img, result;
     private int xOff, yOff;
@@ -67,10 +37,14 @@ public class SectoredCircle extends JPanel {
     private boolean show = true, showImage = true, showSampling = false;
 
     private HashMap<Integer, HashMap<Integer, Integer>> sampled;
-    private HashMap<Integer, ArrayList<Integer>> converted, full, itransform, vtransform, ring, iringTransform, vringTransform;
+    private HashMap<Integer, ArrayList<Integer>> converted, full, ring, derivative, ringDerivative, integration, ringIntegration,
+                                                itransform, vrtransform, vitransform,
+                                                vrderTransform, vrderringTransform, viderTransform, viderringTransform,
+                                                iringTransform, vrringTransform, viringTransform,
+                                                iderTransform, iderRingTransform;
 
     private HashMap<Integer, ArrayList<Integer>> displayed;
-    private HashMap<Integer, ArrayList<Triple<Complex, Complex, Complex>>> transform, ringTransform;
+    private HashMap<Integer, ArrayList<Triple<Complex, Complex, Complex>>> transform, ringTransform, derTransform, derRingTransform;
     // Sector, <Sector to Copy, Changed values>
     private HashMap<Integer, Pair<Integer, HashMap<Integer, Integer>>> copies;
 
@@ -89,14 +63,28 @@ public class SectoredCircle extends JPanel {
         full = new HashMap<>();
         ring = new HashMap<>();
         iringTransform = new HashMap<>();
-        vringTransform = new HashMap<>();
+        vrringTransform = new HashMap<>();
+        viringTransform = new HashMap<>();
         ringTransform = new HashMap<>();
         copies = new HashMap<>();
         compiled = new HashMap<>();
         transform = new HashMap<>();
         itransform = new HashMap<>();
         colorMap = new HashSet<>();
-        vtransform = new HashMap<>();
+        vrtransform = new HashMap<>();
+        vitransform = new HashMap<>();
+        derivative = new HashMap<>();
+        ringDerivative = new HashMap<>();
+        vrderTransform = new HashMap<>();
+        vrderringTransform = new HashMap<>();
+        viderTransform = new HashMap<>();
+        viderringTransform = new HashMap<>();
+        derTransform = new HashMap<>();
+        derRingTransform = new HashMap<>();
+        iderRingTransform = new HashMap<>();
+        iderTransform = new HashMap<>();
+        integration = new HashMap<>();
+        ringIntegration = new HashMap();
         displayed = full;
     }
 
@@ -184,8 +172,8 @@ public class SectoredCircle extends JPanel {
 
                 if (!compiled.isEmpty() && compiled.containsKey(sector)){
                     for(Triple<Integer, Integer, Integer> color : compiled.get(sector)) {
-                        int startLed = color.getFirst();
-                        int endLed = color.getSecond();
+                        int startLed = color.first();
+                        int endLed = color.second();
                         double unitX = (endX - startX) / NUM_LEDS, unitY = (endY - startY) / NUM_LEDS;
 
                         startX = (Math.cos(sectorAngle) * 10 + 400) + startLed * unitX;
@@ -205,11 +193,9 @@ public class SectoredCircle extends JPanel {
             } else {
                 Font font = new Font("Verdana", Font.BOLD, 20);
                 int rgb = result.getRGB(xPix, yPix);
-                int red = (rgb >> 16) & 0xFF;
-                int green = (rgb >> 8) & 0xFF;
-                int blue = rgb & 0xFF;
+                Triple<Integer, Integer, Integer> colors = TransformationUtils.SplitRGB(rgb);
                 g2d.setColor(Color.BLACK);
-                drawCenteredString(g2d, red + ", " + green + ", " + blue, new Rectangle(0, 0, PANEL_WIDTH, PANEL_HEIGHT), font);
+                drawCenteredString(g2d, colors.first() + ", " + colors.second() + ", " + colors.third(), new Rectangle(0, 0, PANEL_WIDTH, PANEL_HEIGHT), font);
             }
         }
 
@@ -259,234 +245,84 @@ public class SectoredCircle extends JPanel {
 
         sampleDifferences();
 
+        sampleDerivative(true);
+
         compileSamples();
 
-        sampleTransform();
+        sampleTransform(true);
 
-        sampleITransform();
+        sampleITransform(true);
     }
 
-    private void sampleTransform() {
+    private void sampleDerivative(boolean useDCT) {
+        ringDerivative.clear();
+        derivative.clear();
+        vrderringTransform.clear();
+        viderringTransform.clear();
+        vrderTransform.clear();
+        viderTransform.clear();
+        iderTransform.clear();
+        iderRingTransform.clear();
+        integration.clear();
+        ringIntegration.clear();
+
+        TransformationUtils.RadialDerivative(full, derivative, SECTORS);
+
+        TransformationUtils.RadialFourierTransform(derivative, viderTransform, vrderTransform, derTransform, SECTORS, FT_SAMPLES, useDCT);
+
+        TransformationUtils.AngularDerivative(full, ringDerivative, SECTORS);
+
+        TransformationUtils.RadialFourierTransform(ringDerivative, viderringTransform, vrderringTransform, derRingTransform, SECTORS, FT_SAMPLES, useDCT);
+
+        int filterStart = 0;
+        int filterEnd = 12;
+
+        TransformationUtils.InverseRadialFourierTransform(derTransform, iderTransform, SECTORS, FT_SAMPLES, filterStart, filterEnd, useDCT);
+        TransformationUtils.InverseRadialFourierTransform(derRingTransform, iderRingTransform, SECTORS, FT_SAMPLES, filterStart, filterEnd, useDCT);
+
+        TransformationUtils.RadialIntegration(derivative, integration, SECTORS);
+        TransformationUtils.AngularIntegration(ringDerivative, ringIntegration, SECTORS);
+
+    }
+
+    private void sampleTransform(boolean useDCT) {
 
         transform.clear();
-        vtransform.clear();
+        vrtransform.clear();
+        vitransform.clear();
+
+        TransformationUtils.RadialFourierTransform(full, vitransform, vrtransform, transform, SECTORS, FT_SAMPLES, useDCT);
 
         ringTransform.clear();
-        vringTransform.clear();
+        vrringTransform.clear();
+        vrringTransform.clear();
 
-        for(int i = 0; i < SECTORS; i++){
-            ArrayList<Integer> sectorColors = full.get(i);
+        TransformationUtils.AngularFourierTransform(ring, viringTransform, vrringTransform, ringTransform, NUM_LEDS, FT_SAMPLES, useDCT);
 
-            ArrayList<Double> red = new ArrayList<>(), green = new ArrayList<>(), blue = new ArrayList<>();
-            ArrayList<Complex> redFt, greenFt, blueFt;
-
-            sectorColors.forEach((e)->{
-                int redSample = (e >> 16) & 0xFF;
-                int greenSample = (e >> 8) & 0xFF;
-                int blueSample = e & 0xFF;
-                red.add((double) redSample);
-                green.add((double) greenSample);
-                blue.add((double) blueSample);
-            });
-
-            redFt = DFT(red);
-            greenFt = DFT(green);
-            blueFt = DFT(blue);
-
-            ArrayList<Triple<Complex, Complex, Complex>> sectorFt = new ArrayList<>();
-            ArrayList<Integer> sector = new ArrayList<>();
-
-            for(int j = 0; j < redFt.size(); j++){
-                sectorFt.add(new Triple<>(redFt.get(j), greenFt.get(j), blueFt.get(j)));
-
-                int redV = (int) redFt.get(j).magnitude();
-                int greenV = (int) greenFt.get(j).magnitude();
-                int blueV = (int) blueFt.get(j).magnitude();
-
-                int value = redV;
-                value = ((value << 8) + greenV);
-                value = ((value << 8) + blueV);
-                sector.add(value);
-            }
-
-            vtransform.put(i, sector);
-            transform.put(i, sectorFt);
-        }
-
-        for(int i = 0; i < NUM_LEDS; i++){
-            ArrayList<Integer> sectorColors = ring.get(i);
-
-            ArrayList<Double> red = new ArrayList<>(), green = new ArrayList<>(), blue = new ArrayList<>();
-            ArrayList<Complex> redFt, greenFt, blueFt;
-
-            sectorColors.forEach((e)->{
-                int redSample = (e >> 16) & 0xFF;
-                int greenSample = (e >> 8) & 0xFF;
-                int blueSample = e & 0xFF;
-                red.add((double) redSample);
-                green.add((double) greenSample);
-                blue.add((double) blueSample);
-            });
-
-            redFt = DFT(red);
-            greenFt = DFT(green);
-            blueFt = DFT(blue);
-
-            ArrayList<Triple<Complex, Complex, Complex>> sectorFt = new ArrayList<>();
-
-
-            for(int j = 0; j < redFt.size(); j++){
-                sectorFt.add(new Triple<>(redFt.get(j), greenFt.get(j), blueFt.get(j)));
-
-                int redV = (int) redFt.get(j).magnitude();
-                int greenV = (int) greenFt.get(j).magnitude();
-                int blueV = (int) blueFt.get(j).magnitude();
-
-                int value = redV;
-                value = ((value << 8) + greenV);
-                value = ((value << 8) + blueV);
-
-                vringTransform.putIfAbsent(j, new ArrayList<Integer>());
-                vringTransform.get(j).add(value);
-            }
-
-            ringTransform.put(i, sectorFt);
-        }
     }
 
-    private void sampleITransform(){
+    private void sampleITransform(boolean useDCT){
 
         iringTransform.clear();
         itransform.clear();
 
         int filterStart = 0;
-        int filterEnd = 50;
+        int filterEnd = FT_SAMPLES - 2;
 
-        for(int i = 0; i < SECTORS; i++){
-            ArrayList<Triple<Complex, Complex, Complex>> ftColors = transform.get(i);
+        TransformationUtils.InverseRadialFourierTransform(transform, itransform, SECTORS, FT_SAMPLES, filterStart, filterEnd, useDCT);
 
-            ArrayList<Complex> red = new ArrayList<>(), green = new ArrayList<>(), blue = new ArrayList<>();
-            ArrayList<Integer> sectorT, greenT, blueT;
-
-            ftColors.forEach((e)->{
-                red.add(e.first);
-                green.add(e.second);
-                blue.add(e.third);
-            });
-
-            sectorT = iDFT(red, filterStart, NUM_LEDS - filterEnd, true);
-            greenT = iDFT(green, filterStart, NUM_LEDS - filterEnd, true);
-            blueT = iDFT(blue, filterStart, NUM_LEDS - filterEnd, true);
-
-            for(int j = 0; j < sectorT.size(); j++){
-                int value = sectorT.get(j);
-                value = ((value << 8) + greenT.get(j));
-                value = ((value << 8) + blueT.get(j));
-                sectorT.set(j, value);
-            }
-
-            itransform.put(i, sectorT);
-        }
-
-        filterStart = 180;
-        filterEnd = 180;
-
-        for(int i = 0; i < NUM_LEDS; i++){
-            ArrayList<Triple<Complex, Complex, Complex>> ftColors = ringTransform.get(i);
-
-            ArrayList<Complex> red = new ArrayList<>(), green = new ArrayList<>(), blue = new ArrayList<>();
-            ArrayList<Integer> sectorT, greenT, blueT;
-
-            ftColors.forEach((e)->{
-                red.add(e.first);
-                green.add(e.second);
-                blue.add(e.third);
-            });
-
-            sectorT = iDFT(red, filterStart, filterEnd, false);
-            greenT = iDFT(green, filterStart, filterEnd, false);
-            blueT = iDFT(blue, filterStart, filterEnd, false);
-
-            for(int j = 0; j < sectorT.size(); j++){
-                int value = sectorT.get(j);
-                value = ((value << 8) + greenT.get(j));
-                value = ((value << 8) + blueT.get(j));
-
-                iringTransform.putIfAbsent(j, new ArrayList<Integer>());
-                iringTransform.get(j).add(value);
-            }
-        }
+        TransformationUtils.InverseAngularFourierTransform(ringTransform, iringTransform, NUM_LEDS, FT_SAMPLES, filterStart, filterEnd, useDCT);
 
     }
 
-    private ArrayList<Integer> zeros(int num){
-        ArrayList<Integer> zero = new ArrayList<>();
-        for(int i = 0; i < num; i++){
-            zero.add(0);
-        }
-        return zero;
-    }
-
-    private ArrayList<Integer> scale(ArrayList<Integer> colors, double scale){
-        ArrayList<Integer> dimmed = new ArrayList<>();
-
-        for(int i = 0; i < colors.size(); i++){
-            int redSample = (colors.get(i) >> 16) & 0xFF;
-            int greenSample = (colors.get(i) >> 8) & 0xFF;
-            int blueSample = colors.get(i) & 0xFF;
-
-            int value = (int) (redSample * scale);
-            value = ((value << 8) + (int) (greenSample * scale));
-            value = ((value << 8) + (int) (blueSample * scale));
-
-            dimmed.add(value);
-        }
-
-        return dimmed;
-    }
-
-    private ArrayList<Complex> DFT(ArrayList<Double> samples) {
-
-        ArrayList<Complex> transformed = new ArrayList<>();
-
-        for(int i = 0; i < samples.size(); i++) {
-            double next = 0;
-            double nextSin = 0;
-            for (int j = 0; j < samples.size(); j++) {
-                next += samples.get(j) * Math.cos(2 * Math.PI * i * j / samples.size());
-                nextSin += samples.get(j) * Math.sin(2 * Math.PI * i * j / samples.size());
-            }
-            transformed.add(new Complex(next, nextSin));
-        }
-
-        return transformed;
-    }
-
-    private ArrayList<Integer> iDFT(ArrayList<Complex> samples, int filterStart, int filterEnd, boolean inclusive) {
-
-        ArrayList<Integer> transformed = new ArrayList<>();
-
-        for(int i = 0; i < samples.size(); i++) {
-            double next = 0;
-            for (int j = 0; j < samples.size(); j++) {
-
-                boolean inclusiveCase = (inclusive && j >= filterStart && j <= filterEnd);
-                boolean exclusiveCase = (!inclusive && (j <= filterStart || j >= filterEnd));
-
-                if(inclusiveCase || exclusiveCase)
-                    next += samples.get(j).real * Math.cos(2 * Math.PI * i * j / samples.size())  + samples.get(j).imag * Math.sin(2 * Math.PI * i * j / samples.size());
-            }
-            next /= samples.size();
-            transformed.add((int) next);
-        }
-
-        return transformed;
-    }
 
     private void sampleImage() {
 
         this.showGuide(true);
+        boolean tempSampling = this.showSampling;
+        this.showSampling = false;
         BufferedImage image = generateImage();
+        this.showSampling = tempSampling;
         this.showGuide(false);
         try {
             ImageIO.write(image, "jpg", new File("./export.jpg"));
@@ -506,6 +342,9 @@ public class SectoredCircle extends JPanel {
 
             int trueSampleRadius = SAMPLE_RADIUS;
 
+            int samples = SECTORS;
+            int numSampled = 0;
+
             for (double j = 0; j < 2 * Math.PI; j += 2 * Math.PI / SECTORS) {
                 double angle = j + Math.PI / SECTORS;
 
@@ -524,13 +363,11 @@ public class SectoredCircle extends JPanel {
                         Color crgb = new Color(image.getRGB((int) iterX + x, (int) iterY + y));
                         int rgb = crgb.getRGB();
 
-                        int redSample = (rgb >> 16) & 0xFF;
-                        int greenSample = (rgb >> 8) & 0xFF;
-                        int blueSample = rgb & 0xFF;
+                        Triple<Integer, Integer, Integer> sample = TransformationUtils.SplitRGB(rgb);
 
-                        red += redSample;
-                        green += greenSample;
-                        blue += blueSample;
+                        red += sample.first();
+                        green += sample.second();
+                        blue += sample.third();
                     }
 
                 double area = 255 * (trueSampleRadius * 2 + 1) * (trueSampleRadius * 2 + 1);
@@ -545,25 +382,26 @@ public class SectoredCircle extends JPanel {
                 double greenTB = Math.pow(greenB, gamma);
                 double blueTB = Math.pow(blueB, gamma);
 
-                double scale = 1;
+                Triple<Integer, Integer, Integer> color = new Triple<>((int) (redTB * 255), (int) (greenTB * 176), (int) (blueTB * 240));
 
-                int redT = (int) (redTB * 255), greenT = (int) (greenTB * 176), blueT = (int) (blueTB * 240);
+                int value = TransformationUtils.CombineRGB(color);
 
-                int value = (int) (redT * scale);
-                value = (int) ((value << 8) + greenT * scale);
-                value = (int) ((value << 8) + blueT * scale);
+                if(angle > (2 * Math.PI / samples) * numSampled) {
+                    colorMap.add(value);
 
-                colorMap.add(value);
-
-                if (ledColorChangeMap.isEmpty() || ledColorChangeMap.get(prevSector) != value) {
-                    prevSector = sector;
-                    ledColorChangeMap.put(prevSector, value);
+                    if (ledColorChangeMap.isEmpty() || ledColorChangeMap.get(prevSector) != value) {
+                        prevSector = sector;
+                        ledColorChangeMap.put(prevSector, value);
+                    }
+                    numSampled++;
                 }
                 sector++;
             }
             sampled.put(i, ledColorChangeMap);
             System.out.println(i + ":" + ledColorChangeMap.size());
         }
+
+        System.out.println("Unique Colors: " + colorMap.size());
     }
 
     private void expandSampling() {
@@ -672,8 +510,6 @@ public class SectoredCircle extends JPanel {
                 compiled.put(i, color);
             }
         }
-
-        System.out.println("Unique Colors: " + colorMap.size());
     }
 
     public int sample(int x, int y){
@@ -685,16 +521,40 @@ public class SectoredCircle extends JPanel {
         return 0;
     }
 
-    public void showRadial(boolean ift) {
-        this.displayed = ift ? iringTransform : vringTransform;
+    private void postDisplayUpdate() {
+        colorMap.clear();
+        for(int i = 0; i < SECTORS; i++){
+            ArrayList<Integer> crgbs = this.displayed.get(i);
+            colorMap.addAll(crgbs);
+        }
+        System.out.println("Unique Colors: " + colorMap.size());
     }
 
-    public void showAngular(boolean ift) {
-        this.displayed = ift ? itransform : vtransform;
+    public void showRadial(boolean ift, boolean real) {
+        this.displayed = ift ? iringTransform : (real ? vrringTransform : viringTransform);
+        this.postDisplayUpdate();
+    }
+
+
+
+    public void showAngular(boolean ift, boolean real) {
+        this.displayed = ift ? itransform : (real ? vrtransform : vitransform);
+        this.postDisplayUpdate();
+    }
+
+    public void showDerivative(boolean radial, boolean transform, boolean ift){
+        this.displayed = !radial ? (ift ? iderRingTransform : (transform ? vrderringTransform : ringDerivative)) : (ift ? iderTransform : (transform ? vrderTransform : derivative));
+        this.postDisplayUpdate();
+    }
+
+    public void showIntegration(boolean radial){
+        this.displayed = radial ? integration : ringIntegration;
+        this.postDisplayUpdate();
     }
 
     public void showDefaultSample() {
         this.displayed = full;
+        this.postDisplayUpdate();
     }
 
 
@@ -742,12 +602,12 @@ public class SectoredCircle extends JPanel {
                 server.addRequest("stage-ar", id, sector);
 
                 for (Triple<Integer, Integer, Integer> color : crgb) {
-                    int ledStart = color.getFirst();
-                    int ledEnd = color.getSecond();
+                    int ledStart = color.first();
+                    int ledEnd = color.second();
                     if(ledEnd - ledStart > 1)
-                        server.addRequest("leds", id, ledStart, ledEnd, color.getThird());
+                        server.addRequest("leds", id, ledStart, ledEnd, color.third());
                     else
-                        server.addRequest("led", id, ledStart, color.getThird());
+                        server.addRequest("led", id, ledStart, color.third());
                 }
 
                 server.addRequest("commit-ar", id, new ArrayList<Integer>());

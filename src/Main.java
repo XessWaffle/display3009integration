@@ -180,27 +180,73 @@ public final class Main {
         sampleButton.setBounds(1000, 60, SectoredCircle.PANEL_WIDTH / 4, 50);
         frame.getContentPane().add(sampleButton);
 
-        String[] options = {"Default", "Radial FT", "Angular FT", "Radial IFT", "Angular IFT"};
+        final String[] options = {"Default", "Radial FT (Real)", "Radial FT (Imaginary)", "Angular FT (Real)", "Angular FT (Imaginary)",
+                                    "Radial IFT", "Angular IFT", "Radial Derivative", "Angular Derivative",
+                                    "Radial Derivative FT", "Angular Derivative FT", "Radial Derivative IFT", "Angular Derivative IFT",
+                                    "Radial Integration", "Angular Integration"};
 
         JComboBox<String> exportBox = new JComboBox(options);
+        DefaultListCellRenderer listRenderer = new DefaultListCellRenderer();
+        listRenderer.setHorizontalAlignment(DefaultListCellRenderer.CENTER); // center-aligned items
+        exportBox.setRenderer(listRenderer);
         exportBox.addActionListener(e -> {
             String selected = exportBox.getItemAt(exportBox.getSelectedIndex());
             switch (selected){
 
-                case "Radial FT":
-                    circle.showRadial(false);
+                case "Radial FT (Real)":
+                    circle.showRadial(false, true);
                     break;
 
-                case "Angular FT":
-                    circle.showAngular(false);
+                case "Radial FT (Imaginary)":
+                    circle.showRadial(false, false);
+                    break;
+
+                case "Angular FT (Real)":
+                    circle.showAngular(false, true);
+                    break;
+
+                case "Angular FT (Imaginary)":
+                    circle.showAngular(false, false);
                     break;
 
                 case "Radial IFT":
-                    circle.showRadial(true);
+                    circle.showRadial(true, false);
                     break;
 
                 case "Angular IFT":
-                    circle.showAngular(true);
+                    circle.showAngular(true, false);
+                    break;
+
+                case "Radial Derivative":
+                    circle.showDerivative(true, false, false);
+                    break;
+
+                case "Angular Derivative":
+                    circle.showDerivative(false, false, false);
+                    break;
+
+                case "Radial Derivative FT":
+                    circle.showDerivative(true, true, false);
+                    break;
+
+                case "Angular Derivative FT":
+                    circle.showDerivative(false, true, false);
+                    break;
+
+                case "Radial Derivative IFT":
+                    circle.showDerivative(true, false, true);
+                    break;
+
+                case "Angular Derivative IFT":
+                    circle.showDerivative(false, false, true);
+                    break;
+
+                case "Radial Integration":
+                    circle.showIntegration(true);
+                    break;
+
+                case "Angular Integration":
+                    circle.showIntegration(false);
                     break;
 
                 default:
