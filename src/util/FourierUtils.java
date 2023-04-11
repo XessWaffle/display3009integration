@@ -101,9 +101,7 @@ public class FourierUtils {
 
 
         //System.out.println(counter.size());
-
-        if(max > 127 || min < -128)
-            System.out.println("Uh oh! " + (int)max + " " + (int)min);
+        //System.out.println(counter.size());
 
         return transformed;
     }

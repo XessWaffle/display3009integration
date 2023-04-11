@@ -1,5 +1,6 @@
 import javafx.util.Pair;
 import server.ESPControlServer;
+import util.EncodingUtils;
 import util.FourierUtils.Complex;
 import util.TransformationUtils;
 import util.TransformationUtils.*;
@@ -10,6 +11,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -252,6 +254,32 @@ public class SectoredCircle extends JPanel {
         sampleTransform(true);
 
         sampleITransform(true);
+
+        saveFiles();
+    }
+
+    private void saveFiles() {
+
+        HashMap<Integer, ByteBuffer> fullEncoded = new HashMap<>();
+
+        EncodingUtils.HuffmanEncode(full, fullEncoded, SECTORS);
+
+        try {
+            EncodingUtils.WriteToFile("./full.rie", fullEncoded);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        HashMap<Integer, ByteBuffer> derivativeEncoded = new HashMap<>();
+
+        EncodingUtils.HuffmanEncode(derivative, derivativeEncoded, SECTORS);
+
+        try {
+            EncodingUtils.WriteToFile("./derivative.rie", derivativeEncoded);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 
     private void sampleDerivative(boolean useDCT) {
@@ -398,10 +426,10 @@ public class SectoredCircle extends JPanel {
                 sector++;
             }
             sampled.put(i, ledColorChangeMap);
-            System.out.println(i + ":" + ledColorChangeMap.size());
+            //System.out.println(i + ":" + ledColorChangeMap.size());
         }
 
-        System.out.println("Unique Colors: " + colorMap.size());
+        //System.out.println("Unique Colors: " + colorMap.size());
     }
 
     private void expandSampling() {

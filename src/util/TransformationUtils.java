@@ -1,14 +1,14 @@
 package util;
 
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.nio.ByteBuffer;
+import java.util.*;
 
+import javafx.util.Pair;
 import util.FourierUtils.Complex;
 
 public class TransformationUtils {
 
     public record Triple<T, U, V>(T first, U second, V third) {}
-
 
     public static Triple<Integer, Integer, Integer> SplitRGB(int rgb){
         return new Triple<>((rgb >> 16)  & 0xFF, (rgb >> 8)  & 0xFF, rgb  & 0xFF);
@@ -20,6 +20,7 @@ public class TransformationUtils {
         value = ((value << 8) + rgb.third());
         return value;
     }
+
 
     public static void RadialDerivative(HashMap<Integer, ArrayList<Integer>> samples,
                                         HashMap<Integer, ArrayList<Integer>> transform,
@@ -61,7 +62,7 @@ public class TransformationUtils {
                                     totalColor.second() + (currDer.second()),
                                     totalColor.third() + (currDer.third()));
 
-                    System.out.println(currDer.first() + " " + currDer.second() + " " + currDer.third());
+                    //System.out.println(currDer.first() + " " + currDer.second() + " " + currDer.third());
 
 
 
